@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Generator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔲 QR Code Generator</h1>
+
+        <div class="generator-section">
+            <div class="input-group">
+                <input type="text" id="urlInput" placeholder="Enter your link here (e.g., https://example.com)">
+                <button id="generateBtn" onclick="generateQR()">Generate QR</button>
+            </div>
+
+            <div class="qr-preview">
+                <div id="qrContainer">
+                    <div class="blank-qr" id="blankQR">
+                        <div class="qr-placeholder">
+                            <span>Your QR will appear here</span>
+                        </div>
+                    </div>
+                    <img id="qrImage" src="" alt="QR Code" style="display: none;">
+                </div>
+                <div class="qr-actions" id="qrActions" style="display: none;">
+                    <button class="action-btn download-btn" onclick="downloadQR()">📥 Download</button>
+                    <button class="action-btn edit-btn" onclick="editQR()">✏️ Edit</button>
+                    <button class="action-btn save-btn" onclick="saveQR()">💾 Save</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="saved-section">
+            <h2>💾 Saved QR Codes</h2>
+            <div id="savedList" class="saved-list">
+                <p class="empty-message">No saved QR codes yet</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentQRId = null;
+        let currentUrl = '';
+
+        function generateQR() {
+            const url = document.getElementById('urlInput').value.trim();
+            if (!url) {
+                alert('Please enter a URL');
+                return;
+            }
+
+            fetch('/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url, id: currentQRId })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('blankQR').style.display = 'none';
+                        document.getElementById('qrImage').src = data.image;
+                        document.getElementById('qrImage').style.display = 'block';
+                        document.getElementById('qrActions').style.display = 'flex';
+                        currentUrl = data.url;
+                        currentQRId = data.id;
+                    }
+                })
+                .catch(err => console.error('Error:', err));
+        }
+
+        function downloadQR() {
+            const img = document.getElementById('qrImage');
+            const link = document.createElement('a');
+            link.download = 'qrcode.png';
+            link.href = img.src;
+            link.click();
+        }
+
+        function editQR() {
+            document.getElementById('urlInput').value = currentUrl;
+            document.getElementById('urlInput').focus();
+        }
+
+        function saveQR() {
+            loadSavedQRs();
+            alert('QR Code saved!');
+        }
+
+        function loadSavedQRs() {
+            fetch('/saved')
+                .then(res => res.json())
+                .then(data => {
+                    const container = document.getElementById('savedList');
+                    if (data.length === 0) {
+                        container.innerHTML = '<p class="empty-message">No saved QR codes yet</p>';
+                        return;
+                    }
+
+                    container.innerHTML = data.map(qr => `
+                    <div class="saved-card">
+                        <img src="${qr.image}" alt="QR Code">
+                        <div class="saved-info">
+                            <p class="saved-url">${qr.url}</p>
+                            <div class="saved-actions">
+                                <button onclick="loadQR('${qr.id}', '${qr.url}', '${qr.image}')">✏️ Edit</button>
+                                <button onclick="deleteQR('${qr.id}')" class="delete-btn">🗑️ Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                });
+        }
+
+        function loadQR(id, url, image) {
+            currentQRId = id;
+            currentUrl = url;
+            document.getElementById('urlInput').value = url;
+            document.getElementById('blankQR').style.display = 'none';
+            document.getElementById('qrImage').src = image;
+            document.getElementById('qrImage').style.display = 'block';
+            document.getElementById('qrActions').style.display = 'flex';
+        }
+
+        function deleteQR(id) {
+            if (confirm('Delete this QR code?')) {
+                fetch(`/delete/${id}`, { method: 'DELETE' })
+                    .then(res => res.json())
+                    .then(() => loadSavedQRs());
+            }
+        }
+
+        function resetGenerator() {
+            currentQRId = null;
+            currentUrl = '';
+            document.getElementById('urlInput').value = '';
+            document.getElementById('blankQR').style.display = 'flex';
+            document.getElementById('qrImage').style.display = 'none';
+            document.getElementById('qrActions').style.display = 'none';
+        }
+
+        // Load saved QRs on page load
+        window.onload = loadSavedQRs;
+    </script>
+</body>
+
+</html>
